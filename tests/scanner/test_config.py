@@ -7,6 +7,8 @@ import pytest
 from scripts.scanner.config import (
     ScreeningThresholds,
     DEFAULT_THRESHOLDS,
+    SectorRelativeThresholds,
+    DEFAULT_SECTOR_THRESHOLDS,
     calculate_graham_number,
 )
 
@@ -36,3 +38,42 @@ def test_default_thresholds():
     assert t.peg_ratio_max == 1.0
     assert t.roe_min == 0.15
     assert t.debt_to_equity_max == 0.5
+
+
+# === 雙軌制設定測試 ===
+
+
+def test_default_sector_thresholds():
+    """驗證雙軌制設定的預設值。"""
+    t = DEFAULT_SECTOR_THRESHOLDS
+    # Track 1：產業百分位
+    assert t.sector_percentile_threshold == 0.30
+    assert t.min_sector_size == 5
+    # Track 2：安全底線
+    assert t.safety_pe_max == 50.0
+    assert t.safety_peg_max == 3.0
+    assert t.safety_roe_min == 0.05
+    assert t.safety_de_max == 2.0
+    # 共用
+    assert t.graham_multiplier == 22.5
+
+
+def test_sector_thresholds_frozen():
+    """驗證 SectorRelativeThresholds 為不可變 dataclass。"""
+    t = DEFAULT_SECTOR_THRESHOLDS
+    with pytest.raises(AttributeError):
+        t.sector_percentile_threshold = 0.50
+
+
+def test_custom_sector_thresholds():
+    """驗證可以建立自訂的雙軌制設定。"""
+    t = SectorRelativeThresholds(
+        sector_percentile_threshold=0.20,
+        min_sector_size=10,
+        safety_pe_max=30.0,
+    )
+    assert t.sector_percentile_threshold == 0.20
+    assert t.min_sector_size == 10
+    assert t.safety_pe_max == 30.0
+    # 未指定的欄位保持預設值
+    assert t.safety_roe_min == 0.05

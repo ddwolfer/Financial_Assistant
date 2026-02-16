@@ -24,6 +24,36 @@ class ScreeningThresholds:
 DEFAULT_THRESHOLDS = ScreeningThresholds()
 
 
+@dataclass(frozen=True)
+class SectorRelativeThresholds:
+    """
+    雙軌制篩選設定：產業內百分位排名 + 寬鬆安全底線。
+
+    Track 1（主要）：每個指標在同 GICS 產業內的百分位排名，
+    排名在前 sector_percentile_threshold（預設前 30%）的股票才通過。
+
+    Track 2（安全底線）：寬鬆的絕對門檻，排除明顯不健康的極端值。
+    與 Track 1 同時滿足才算通過。
+    """
+
+    # Track 1：產業內百分位門檻（0.30 = 前 30%）
+    sector_percentile_threshold: float = 0.30
+    # 產業內股票數低於此值則跳過百分位計算，僅用安全底線
+    min_sector_size: int = 5
+
+    # Track 2：寬鬆安全底線（排除極端值）
+    safety_pe_max: float = 50.0
+    safety_peg_max: float = 3.0
+    safety_roe_min: float = 0.05      # 5%
+    safety_de_max: float = 2.0
+
+    # 共用
+    graham_multiplier: float = 22.5
+
+
+DEFAULT_SECTOR_THRESHOLDS = SectorRelativeThresholds()
+
+
 def calculate_graham_number(
     eps: float,
     book_value_per_share: float,
