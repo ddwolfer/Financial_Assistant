@@ -1,15 +1,18 @@
 """
-Stock universe providers.
+股票清單載入器。
 
-Provides ticker lists for screening. Supports S&P 500 via Wikipedia
-scraping and custom ticker lists from local files.
+提供篩選用的股票代碼清單。支援從 Wikipedia 抓取 S&P 500 成分股，
+以及從本地 JSON 檔案載入自訂清單。
 """
 
+from io import StringIO
 from pathlib import Path
 import json
 import logging
+import ssl
 
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -22,35 +25,41 @@ _WIKIPEDIA_SP500_URL = (
 
 def get_sp500_tickers(use_cache: bool = True) -> list[str]:
     """
-    Fetch S&P 500 ticker symbols.
+    取得 S&P 500 成分股代碼。
 
-    Scrapes Wikipedia's S&P 500 list. Results cached locally
-    in data/sp500_tickers.json to avoid repeated network calls.
+    透過 requests 從 Wikipedia 抓取（避免 macOS SSL 憑證問題），
+    結果快取至 data/sp500_tickers.json。
     """
     if use_cache and _SP500_CACHE.exists():
-        logger.info("Loading S&P 500 tickers from cache: %s", _SP500_CACHE)
+        logger.info("從快取載入 S&P 500 清單: %s", _SP500_CACHE)
         with open(_SP500_CACHE) as f:
             return json.load(f)
 
-    logger.info("Fetching S&P 500 tickers from Wikipedia...")
-    tables = pd.read_html(_WIKIPEDIA_SP500_URL)
+    logger.info("從 Wikipedia 抓取 S&P 500 清單...")
+    # 使用 requests（內建 certifi）避免系統 SSL 憑證問題
+    # Wikipedia 會封鎖預設 User-Agent，需設定合理的標頭
+    headers = {"User-Agent": "QuantAnalystAgent/1.0 (financial screening tool)"}
+    response = requests.get(_WIKIPEDIA_SP500_URL, headers=headers, timeout=30)
+    response.raise_for_status()
+
+    tables = pd.read_html(StringIO(response.text))
     df = tables[0]
     tickers = sorted(df["Symbol"].tolist())
-    # Normalize: BRK.B -> BRK-B (yfinance format)
+    # 正規化：BRK.B -> BRK-B（yfinance 格式）
     tickers = [t.replace(".", "-") for t in tickers]
 
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with open(_SP500_CACHE, "w") as f:
         json.dump(tickers, f, indent=2)
-    logger.info("Cached %d tickers to %s", len(tickers), _SP500_CACHE)
+    logger.info("已快取 %d 支股票至 %s", len(tickers), _SP500_CACHE)
 
     return tickers
 
 
 def get_tickers_from_file(filepath: str | Path) -> list[str]:
-    """Load tickers from a JSON file (list of strings)."""
+    """從 JSON 檔案載入股票代碼清單。"""
     with open(filepath) as f:
         tickers = json.load(f)
     if not isinstance(tickers, list):
-        raise ValueError(f"Expected a JSON list in {filepath}")
+        raise ValueError(f"預期 JSON 列表，但 {filepath} 格式不符")
     return [str(t).upper().strip() for t in tickers]
