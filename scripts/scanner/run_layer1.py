@@ -144,6 +144,12 @@ def main():
         default=0.1,
         help="Delay between API calls in seconds (default: 0.1)",
     )
+    parser.add_argument(
+        "--force-refresh",
+        action="store_true",
+        default=False,
+        help="強制重新抓取所有資料，忽略本地快取（預設使用 24 小時快取）",
+    )
     args = parser.parse_args()
 
     # 取得股票代碼清單
@@ -173,9 +179,16 @@ def main():
             len(tickers), DEFAULT_SECTOR_THRESHOLDS,
         )
 
+    use_cache = not args.force_refresh
+    if args.force_refresh:
+        logger.info("快取已停用 (--force-refresh)")
+    else:
+        logger.info("使用本地快取（TTL: 24 小時）")
+
     logger.info("Phase 1/2: Fetching financial data...")
     metrics_list = fetch_batch_metrics(
-        tickers, delay_between=args.delay, progress_callback=_progress
+        tickers, delay_between=args.delay, progress_callback=_progress,
+        use_cache=use_cache,
     )
 
     fetch_errors = sum(1 for m in metrics_list if m.fetch_error)
