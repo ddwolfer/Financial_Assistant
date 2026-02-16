@@ -101,3 +101,47 @@ def test_missing_optional_fields(mock_ticker_cls):
     assert result.debt_to_equity is None
     assert result.peg_ratio is None
     assert result.is_valid is True
+
+
+# === TickerMetrics 序列化測試 ===
+
+
+def test_ticker_metrics_to_dict_roundtrip():
+    """to_dict() → from_dict() 的往返正確性。"""
+    original = TickerMetrics(
+        symbol="ROUND",
+        trailing_pe=15.0,
+        forward_pe=13.0,
+        peg_ratio=0.8,
+        roe=0.20,
+        debt_to_equity=0.45,
+        trailing_eps=5.0,
+        book_value=30.0,
+        current_price=100.0,
+        earnings_growth=0.15,
+        sector="Technology",
+        industry="Software",
+        market_cap=1_000_000_000,
+        company_name="Roundtrip Corp",
+    )
+    restored = TickerMetrics.from_dict(original.to_dict())
+    assert restored == original
+
+
+def test_ticker_metrics_from_dict_with_error():
+    """from_dict 正確還原含 fetch_error 的物件。"""
+    m = TickerMetrics(symbol="ERR", fetch_error="Connection timeout")
+    restored = TickerMetrics.from_dict(m.to_dict())
+    assert restored.fetch_error == "Connection timeout"
+    assert restored.is_valid is False
+
+
+def test_ticker_metrics_from_dict_missing_fields():
+    """from_dict 遇到缺欄位時不 crash，以 None 填充。"""
+    # 模擬舊版快取只有 symbol 和 trailing_pe
+    minimal = {"symbol": "OLD", "trailing_pe": 12.0}
+    restored = TickerMetrics.from_dict(minimal)
+    assert restored.symbol == "OLD"
+    assert restored.trailing_pe == 12.0
+    assert restored.roe is None
+    assert restored.fetch_error is None

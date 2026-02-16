@@ -40,6 +40,47 @@ class TickerMetrics:
         """Check if minimum required metrics were fetched."""
         return self.fetch_error is None and self.trailing_eps is not None
 
+    def to_dict(self) -> dict:
+        """序列化為字典，供 JSON 快取儲存。"""
+        return {
+            "symbol": self.symbol,
+            "trailing_pe": self.trailing_pe,
+            "forward_pe": self.forward_pe,
+            "peg_ratio": self.peg_ratio,
+            "roe": self.roe,
+            "debt_to_equity": self.debt_to_equity,
+            "trailing_eps": self.trailing_eps,
+            "book_value": self.book_value,
+            "current_price": self.current_price,
+            "earnings_growth": self.earnings_growth,
+            "sector": self.sector,
+            "industry": self.industry,
+            "market_cap": self.market_cap,
+            "company_name": self.company_name,
+            "fetch_error": self.fetch_error,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TickerMetrics":
+        """從字典反序列化為 TickerMetrics，使用 get() 確保向後相容。"""
+        return cls(
+            symbol=data["symbol"],
+            trailing_pe=data.get("trailing_pe"),
+            forward_pe=data.get("forward_pe"),
+            peg_ratio=data.get("peg_ratio"),
+            roe=data.get("roe"),
+            debt_to_equity=data.get("debt_to_equity"),
+            trailing_eps=data.get("trailing_eps"),
+            book_value=data.get("book_value"),
+            current_price=data.get("current_price"),
+            earnings_growth=data.get("earnings_growth"),
+            sector=data.get("sector"),
+            industry=data.get("industry"),
+            market_cap=data.get("market_cap"),
+            company_name=data.get("company_name"),
+            fetch_error=data.get("fetch_error"),
+        )
+
 
 def fetch_ticker_metrics(
     symbol: str,
