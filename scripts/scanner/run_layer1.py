@@ -15,7 +15,12 @@ from scripts.scanner.config import DEFAULT_THRESHOLDS
 from scripts.scanner.data_fetcher import fetch_batch_metrics
 from scripts.scanner.screener import screen_batch
 from scripts.scanner.results_store import save_screening_results
-from scripts.scanner.universe import get_sp500_tickers
+from scripts.scanner.universe import (
+    get_sp500_tickers,
+    get_sp400_tickers,
+    get_sp600_tickers,
+    get_sp1500_tickers,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,9 +43,9 @@ def main():
     )
     parser.add_argument(
         "--universe",
-        choices=["sp500"],
+        choices=["sp500", "sp400", "sp600", "sp1500"],
         default=None,
-        help="Predefined universe to screen",
+        help="Predefined universe to screen (sp1500 = sp500+sp400+sp600)",
     )
     parser.add_argument(
         "--delay",
@@ -50,10 +55,18 @@ def main():
     )
     args = parser.parse_args()
 
+    # 取得股票代碼清單
+    _universe_map = {
+        "sp500": get_sp500_tickers,
+        "sp400": get_sp400_tickers,
+        "sp600": get_sp600_tickers,
+        "sp1500": get_sp1500_tickers,
+    }
+
     if args.tickers:
         tickers = [t.upper() for t in args.tickers]
-    elif args.universe == "sp500":
-        tickers = get_sp500_tickers()
+    elif args.universe in _universe_map:
+        tickers = _universe_map[args.universe]()
     else:
         parser.error("Specify --tickers or --universe")
         return
