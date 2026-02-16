@@ -61,6 +61,9 @@ uv run python -m scripts.scanner.run_layer1 --universe sp500 --mode dual
 # 執行 Layer 1 篩選（S&P 1500，雙軌制模式）
 uv run python -m scripts.scanner.run_layer1 --universe sp1500 --mode dual
 
+# 強制重新抓取，忽略本地快取
+uv run python -m scripts.scanner.run_layer1 --universe sp500 --force-refresh
+
 # 啟動 MCP 伺服器
 uv run python mcp_servers/financial_tools.py
 ```
@@ -82,6 +85,9 @@ uv run python mcp_servers/financial_tools.py
 - yfinance 的 `pegRatio` 自 2025 年 6 月起故障，需手動計算備案
 - yfinance 的 `debtToEquity` 回傳百分比（如 170.5），需除以 100 轉為比率
 - Yahoo Finance 有流量限制，批量抓取時需設定延遲（預設 0.1 秒）
+- 指標快取檔案位於 `data/metrics_cache.json`，預設 24 小時 TTL
+- 失敗的抓取快取 1 小時後自動重試
+- 使用 `--force-refresh` 可強制重新抓取，忽略快取
 
 ## 目錄結構
 ```
@@ -91,16 +97,17 @@ Financial_Assistant/
 │   └── financial_tools.py   # 四個金融工具（含雙軌制篩選）
 ├── scripts/
 │   ├── scanner/             # Layer 1 量化篩選器
-│   │   ├── config.py        # 篩選門檻設定（含 SectorRelativeThresholds）
+│   │   ├── config.py        # 篩選門檻設定（含 SectorRelativeThresholds、CacheConfig）
 │   │   ├── universe.py      # 股票清單載入器（S&P 500/400/600/1500）
-│   │   ├── data_fetcher.py  # yfinance 數據抓取
+│   │   ├── data_fetcher.py  # yfinance 數據抓取（含快取整合）
+│   │   ├── metrics_cache.py # TTL 快取管理器（24h/1h）
 │   │   ├── screener.py      # 絕對門檻篩選邏輯
 │   │   ├── sector_screener.py # 雙軌制產業相對篩選引擎
 │   │   ├── results_store.py # JSON 持久化
-│   │   └── run_layer1.py    # CLI 進入點（支援 --mode dual/absolute）
+│   │   └── run_layer1.py    # CLI 進入點（支援 --mode、--force-refresh）
 │   ├── analyzer/            # 數據清理（待開發）
 │   └── templates/           # 12 組分析範本（待開發）
 ├── data/                    # 本地數據暫存
-├── tests/                   # 測試套件（56 個測試）
+├── tests/                   # 測試套件（69 個測試）
 └── web/                     # Svelte 5 Dashboard（待開發）
 ```
