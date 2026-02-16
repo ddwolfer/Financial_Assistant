@@ -92,10 +92,12 @@ def _print_dual_results(results):
                     peg_pct = f" (p{r.sector_percentiles.peg_percentile:.0%})"
                 peg_str = f"{r.metrics.peg_ratio:>5.2f}{peg_pct}"
 
+            roe_str = f"{r.metrics.roe:.1%}" if r.metrics.roe is not None else "N/A"
+            de_str = f"{r.metrics.debt_to_equity:.2f}" if r.metrics.debt_to_equity is not None else "N/A"
             sector = r.metrics.sector or "Unknown"
             print(
                 f"  {r.symbol:8s} | {sector:25s} | PE={pe_str} | PEG={peg_str} | "
-                f"ROE={r.metrics.roe:.1%} | D/E={r.metrics.debt_to_equity:.2f} | "
+                f"ROE={roe_str} | D/E={de_str} | "
                 f"{graham} | {mos}"
             )
 
