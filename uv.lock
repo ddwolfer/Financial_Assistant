@@ -1422,6 +1422,7 @@ name = "quant-analyst-agent"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "certifi" },
     { name = "fastmcp" },
     { name = "lxml" },
     { name = "pandas" },
@@ -1437,6 +1438,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "certifi", specifier = ">=2026.1.4" },
     { name = "fastmcp", specifier = ">=2.14.5" },
     { name = "lxml", specifier = ">=6.0.2" },
     { name = "pandas", specifier = ">=3.0.0" },

@@ -52,8 +52,14 @@ uv run pytest tests/ -v
 # 執行 Layer 1 篩選（指定股票）
 uv run python -m scripts.scanner.run_layer1 --tickers AAPL MSFT GOOGL
 
-# 執行 Layer 1 篩選（S&P 500 全量）
-uv run python -m scripts.scanner.run_layer1 --universe sp500
+# 執行 Layer 1 篩選（S&P 500，絕對門檻模式）
+uv run python -m scripts.scanner.run_layer1 --universe sp500 --mode absolute
+
+# 執行 Layer 1 篩選（S&P 500，雙軌制模式 — 預設）
+uv run python -m scripts.scanner.run_layer1 --universe sp500 --mode dual
+
+# 執行 Layer 1 篩選（S&P 1500，雙軌制模式）
+uv run python -m scripts.scanner.run_layer1 --universe sp1500 --mode dual
 
 # 啟動 MCP 伺服器
 uv run python mcp_servers/financial_tools.py
@@ -82,18 +88,19 @@ uv run python mcp_servers/financial_tools.py
 Financial_Assistant/
 ├── .claude/skills/          # Claude Skills 定義
 ├── mcp_servers/             # MCP 伺服器（Python）
-│   └── financial_tools.py   # 三個金融工具
+│   └── financial_tools.py   # 四個金融工具（含雙軌制篩選）
 ├── scripts/
 │   ├── scanner/             # Layer 1 量化篩選器
-│   │   ├── config.py        # 篩選門檻設定
-│   │   ├── universe.py      # 股票清單載入器
+│   │   ├── config.py        # 篩選門檻設定（含 SectorRelativeThresholds）
+│   │   ├── universe.py      # 股票清單載入器（S&P 500/400/600/1500）
 │   │   ├── data_fetcher.py  # yfinance 數據抓取
-│   │   ├── screener.py      # 篩選邏輯核心
+│   │   ├── screener.py      # 絕對門檻篩選邏輯
+│   │   ├── sector_screener.py # 雙軌制產業相對篩選引擎
 │   │   ├── results_store.py # JSON 持久化
-│   │   └── run_layer1.py    # CLI 進入點
+│   │   └── run_layer1.py    # CLI 進入點（支援 --mode dual/absolute）
 │   ├── analyzer/            # 數據清理（待開發）
 │   └── templates/           # 12 組分析範本（待開發）
 ├── data/                    # 本地數據暫存
-├── tests/                   # 測試套件（29 個測試）
+├── tests/                   # 測試套件（56 個測試）
 └── web/                     # Svelte 5 Dashboard（待開發）
 ```

@@ -107,5 +107,75 @@ def calculate_financial_metrics(ticker: str) -> dict:
     }
 
 
+@mcp.tool
+def run_sector_screening(
+    universe: str = "sp500",
+    percentile_threshold: float = 0.30,
+) -> dict:
+    """
+    Run dual-track sector-relative screening on a stock universe.
+
+    Screens stocks using sector-relative percentile ranking (Track 1)
+    combined with safety thresholds (Track 2). Returns stocks that
+    pass both filters, with sector distribution info.
+
+    Args:
+        universe: Stock universe to screen (sp500, sp400, sp600, sp1500)
+        percentile_threshold: Top X% within sector (default 0.30 = top 30%)
+    """
+    from scripts.scanner.data_fetcher import fetch_batch_metrics
+    from scripts.scanner.config import SectorRelativeThresholds
+    from scripts.scanner.sector_screener import screen_batch_dual_track
+    from scripts.scanner.universe import (
+        get_sp500_tickers,
+        get_sp400_tickers,
+        get_sp600_tickers,
+        get_sp1500_tickers,
+    )
+
+    universe_map = {
+        "sp500": get_sp500_tickers,
+        "sp400": get_sp400_tickers,
+        "sp600": get_sp600_tickers,
+        "sp1500": get_sp1500_tickers,
+    }
+
+    if universe not in universe_map:
+        return {
+            "success": False,
+            "error": f"Unknown universe: {universe}. Choose from: {list(universe_map.keys())}",
+        }
+
+    tickers = universe_map[universe]()
+    metrics_list = fetch_batch_metrics(tickers)
+
+    thresholds = SectorRelativeThresholds(
+        sector_percentile_threshold=percentile_threshold,
+    )
+    results = screen_batch_dual_track(metrics_list, thresholds)
+
+    passed = [r for r in results if r.passed]
+
+    # 產業分布
+    sector_dist: dict[str, dict] = {}
+    for r in results:
+        if r.metrics and r.metrics.sector:
+            sector = r.metrics.sector
+            if sector not in sector_dist:
+                sector_dist[sector] = {"screened": 0, "passed": 0}
+            sector_dist[sector]["screened"] += 1
+            if r.passed:
+                sector_dist[sector]["passed"] += 1
+
+    return {
+        "success": True,
+        "universe": universe,
+        "total_screened": len(results),
+        "total_passed": len(passed),
+        "sector_distribution": sector_dist,
+        "passed_stocks": [r.to_dict() for r in passed],
+    }
+
+
 if __name__ == "__main__":
     mcp.run()

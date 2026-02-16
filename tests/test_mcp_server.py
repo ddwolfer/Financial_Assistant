@@ -76,3 +76,13 @@ def test_mcp_server_has_tools():
     assert "check_data_cache" in tool_names
     assert "fetch_missing_data" in tool_names
     assert "calculate_financial_metrics" in tool_names
+
+
+def test_mcp_server_has_sector_screening_tool():
+    """MCP 伺服器註冊了雙軌制篩選工具。"""
+    from mcp_servers.financial_tools import mcp
+
+    tool_names = [t.name for t in mcp._tool_manager._tools.values()]
+    assert "run_sector_screening" in tool_names
+    # 確認總共有 4 個工具
+    assert len(tool_names) == 4
