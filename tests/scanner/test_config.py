@@ -9,6 +9,8 @@ from scripts.scanner.config import (
     DEFAULT_THRESHOLDS,
     SectorRelativeThresholds,
     DEFAULT_SECTOR_THRESHOLDS,
+    CacheConfig,
+    DEFAULT_CACHE_CONFIG,
     calculate_graham_number,
 )
 
@@ -77,3 +79,21 @@ def test_custom_sector_thresholds():
     assert t.safety_pe_max == 30.0
     # 未指定的欄位保持預設值
     assert t.safety_roe_min == 0.05
+
+
+# === 快取設定測試 ===
+
+
+def test_default_cache_config():
+    """驗證快取設定的預設值。"""
+    c = DEFAULT_CACHE_CONFIG
+    assert c.ttl_seconds == 86400          # 24 小時
+    assert c.error_ttl_seconds == 3600     # 1 小時
+    assert c.cache_filename == "metrics_cache.json"
+
+
+def test_cache_config_frozen():
+    """驗證 CacheConfig 為不可變 dataclass。"""
+    c = DEFAULT_CACHE_CONFIG
+    with pytest.raises(AttributeError):
+        c.ttl_seconds = 999

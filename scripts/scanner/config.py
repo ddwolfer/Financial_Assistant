@@ -54,6 +54,24 @@ class SectorRelativeThresholds:
 DEFAULT_SECTOR_THRESHOLDS = SectorRelativeThresholds()
 
 
+@dataclass(frozen=True)
+class CacheConfig:
+    """
+    指標快取設定。
+
+    ttl_seconds: 成功抓取的快取有效時間（預設 86400 = 24 小時）
+    error_ttl_seconds: 抓取失敗的快取有效時間（預設 3600 = 1 小時）
+    cache_filename: 快取檔案名稱
+    """
+
+    ttl_seconds: int = 86400          # 24 小時
+    error_ttl_seconds: int = 3600     # 1 小時
+    cache_filename: str = "metrics_cache.json"
+
+
+DEFAULT_CACHE_CONFIG = CacheConfig()
+
+
 def calculate_graham_number(
     eps: float,
     book_value_per_share: float,
