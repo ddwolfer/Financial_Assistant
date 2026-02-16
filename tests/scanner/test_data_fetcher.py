@@ -36,7 +36,7 @@ def _mock_info(**overrides):
 def test_basic_fetch(mock_ticker_cls):
     """Fetches and normalizes metrics correctly."""
     mock_ticker_cls.return_value.info = _mock_info()
-    result = fetch_ticker_metrics("TEST")
+    result = fetch_ticker_metrics("TEST", use_cache=False)
 
     assert result.symbol == "TEST"
     assert result.trailing_pe == 12.5
@@ -54,7 +54,7 @@ def test_peg_fallback_calculation(mock_ticker_cls):
         trailingPE=20.0,
         earningsGrowth=0.25,
     )
-    result = fetch_ticker_metrics("TEST")
+    result = fetch_ticker_metrics("TEST", use_cache=False)
     # PEG = 20.0 / (0.25 * 100) = 20 / 25 = 0.8
     assert result.peg_ratio == pytest.approx(0.8)
 
@@ -63,7 +63,7 @@ def test_peg_fallback_calculation(mock_ticker_cls):
 def test_peg_native_value_preferred(mock_ticker_cls):
     """When pegRatio is present, uses native value."""
     mock_ticker_cls.return_value.info = _mock_info(pegRatio=1.5)
-    result = fetch_ticker_metrics("TEST")
+    result = fetch_ticker_metrics("TEST", use_cache=False)
     assert result.peg_ratio == 1.5
 
 
@@ -71,7 +71,7 @@ def test_peg_native_value_preferred(mock_ticker_cls):
 def test_empty_info_returns_error(mock_ticker_cls):
     """Empty info dict produces a fetch error."""
     mock_ticker_cls.return_value.info = {}
-    result = fetch_ticker_metrics("FAKE")
+    result = fetch_ticker_metrics("FAKE", use_cache=False)
     assert result.fetch_error is not None
     assert result.is_valid is False
 
@@ -84,7 +84,7 @@ def test_exception_retries(mock_ticker_cls):
         Exception("rate limit"),
         Exception("rate limit"),
     ]
-    result = fetch_ticker_metrics("FAIL", retry_count=2, retry_delay=0.01)
+    result = fetch_ticker_metrics("FAIL", retry_count=2, retry_delay=0.01, use_cache=False)
     assert result.fetch_error is not None
 
 
@@ -96,7 +96,7 @@ def test_missing_optional_fields(mock_ticker_cls):
         debtToEquity=None,
         earningsGrowth=None,
     )
-    result = fetch_ticker_metrics("PARTIAL")
+    result = fetch_ticker_metrics("PARTIAL", use_cache=False)
     assert result.roe is None
     assert result.debt_to_equity is None
     assert result.peg_ratio is None

@@ -35,7 +35,7 @@ def test_fetch_missing_data_logic(mock_ticker_cls):
     mock_ticker_cls.return_value.info = _mock_info()
 
     # Test the underlying logic directly (MCP wraps it)
-    metrics = fetch_ticker_metrics("AAPL")
+    metrics = fetch_ticker_metrics("AAPL", use_cache=False)
 
     assert metrics.symbol == "AAPL"
     assert metrics.trailing_pe == 28.0
@@ -61,7 +61,7 @@ def test_calculate_financial_metrics_logic(mock_ticker_cls):
         earningsGrowth=0.20,
     )
 
-    metrics = fetch_ticker_metrics("VALUE")
+    metrics = fetch_ticker_metrics("VALUE", use_cache=False)
     result = screen_ticker(metrics)
 
     assert result.passed is True

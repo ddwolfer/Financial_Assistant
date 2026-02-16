@@ -82,16 +82,15 @@ class TickerMetrics:
         )
 
 
-def fetch_ticker_metrics(
+def _fetch_from_yfinance(
     symbol: str,
     retry_count: int = 2,
     retry_delay: float = 1.0,
 ) -> TickerMetrics:
     """
-    Fetch financial metrics for a single ticker from yfinance.
+    從 yfinance API 抓取單一股票的指標（內部函數，不含快取邏輯）。
 
-    Handles missing fields, PEG ratio fallback calculation,
-    and debtToEquity normalization (percentage -> ratio).
+    處理缺失欄位、PEG Ratio 備用計算，以及 debtToEquity 正規化。
     """
     for attempt in range(retry_count + 1):
         try:
@@ -152,25 +151,111 @@ def fetch_ticker_metrics(
     return TickerMetrics(symbol=symbol, fetch_error="Unknown error")
 
 
+def fetch_ticker_metrics(
+    symbol: str,
+    retry_count: int = 2,
+    retry_delay: float = 1.0,
+    use_cache: bool = True,
+    _cache=None,
+) -> TickerMetrics:
+    """
+    抓取單一股票的指標，支援本地快取。
+
+    Args:
+        symbol: 股票代碼
+        retry_count: 失敗重試次數
+        retry_delay: 重試間隔（秒）
+        use_cache: 是否使用本地快取（預設 True）
+        _cache: 內部參數，批次操作時傳入共用 MetricsCache 實例
+    """
+    # 延遲 import 避免循環依賴
+    from scripts.scanner.metrics_cache import MetricsCache
+
+    # 快取查詢
+    own_cache = False
+    if use_cache:
+        if _cache is None:
+            _cache = MetricsCache()
+            _cache.load()
+            own_cache = True  # 標記為自行建立的快取實例
+        cached = _cache.get(symbol)
+        if cached is not None:
+            return cached
+
+    # 從 yfinance 抓取
+    result = _fetch_from_yfinance(symbol, retry_count, retry_delay)
+
+    # 寫入快取
+    if use_cache and _cache is not None:
+        _cache.put(result)
+        # 單獨呼叫時自行管理存檔；批次模式由外部統一存檔
+        if own_cache:
+            _cache.save()
+
+    return result
+
+
 def fetch_batch_metrics(
     symbols: list[str],
     delay_between: float = 0.1,
     progress_callback=None,
+    use_cache: bool = True,
 ) -> list[TickerMetrics]:
     """
-    Fetch metrics for a batch of tickers with rate limiting.
+    批次抓取指標，自動使用快取。
+
+    快取最佳化：載入一次 → 篩選需抓取的標的 → 抓取 → 合併 → 存檔一次。
     """
-    results = []
+    from scripts.scanner.metrics_cache import MetricsCache
+
+    cache = MetricsCache() if use_cache else None
+    if cache:
+        cache.load()
+
     total = len(symbols)
+    # 第一階段：檢查快取，分組為「命中」和「需抓取」
+    cached_results: list[tuple[int, TickerMetrics]] = []
+    fetch_needed: list[tuple[int, str]] = []
 
     for i, symbol in enumerate(symbols):
-        metrics = fetch_ticker_metrics(symbol)
-        results.append(metrics)
+        if cache:
+            cached = cache.get(symbol)
+            if cached is not None:
+                cached_results.append((i, cached))
+                continue
+        fetch_needed.append((i, symbol))
+
+    cache_hits = len(cached_results)
+    if cache:
+        logger.info(
+            "快取統計: %d 命中 / %d 需抓取 / %d 總計",
+            cache_hits, len(fetch_needed), total,
+        )
+
+    # 第二階段：從 API 抓取缺失/過期的資料
+    fetched_results: list[tuple[int, TickerMetrics]] = []
+    for fetch_idx, (original_idx, symbol) in enumerate(fetch_needed):
+        metrics = _fetch_from_yfinance(symbol)
+        fetched_results.append((original_idx, metrics))
+
+        if cache:
+            cache.put(metrics)
 
         if progress_callback:
-            progress_callback(i + 1, total)
+            # 進度 = 快取命中數 + 已抓取數
+            progress_callback(cache_hits + fetch_idx + 1, total)
 
-        if i < total - 1:
+        if fetch_idx < len(fetch_needed) - 1:
             time.sleep(delay_between)
 
-    return results
+    # 快取命中的部分也要報告進度（一次性跳到命中數）
+    if cache and cache_hits > 0 and progress_callback and len(fetch_needed) == 0:
+        progress_callback(total, total)
+
+    # 第三階段：存檔並依原始順序排列
+    if cache:
+        cache.save()
+
+    all_results = cached_results + fetched_results
+    all_results.sort(key=lambda pair: pair[0])
+    return [metrics for _, metrics in all_results]
