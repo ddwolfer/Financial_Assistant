@@ -86,7 +86,11 @@ def find_peers(
         and not m.fetch_error
     ]
 
-    # 合併：先同 industry，再同 sector（去重）
+    # ★ 先按市值排序，確保合併時優先選市值大的同業
+    same_industry.sort(key=lambda m: m.market_cap or 0, reverse=True)
+    same_sector.sort(key=lambda m: m.market_cap or 0, reverse=True)
+
+    # 合併：先同 industry（已按市值排序），再補充同 sector（已按市值排序）
     seen = set(m.symbol for m in same_industry)
     combined = list(same_industry)
     for m in same_sector:
@@ -96,7 +100,6 @@ def find_peers(
         if len(combined) >= count:
             break
 
-    combined.sort(key=lambda m: m.market_cap or 0, reverse=True)
     return [m.symbol for m in combined[:count]]
 
 
