@@ -120,7 +120,7 @@ def _analyze_single(
 
     # 4. 快取存入
     if use_cache:
-        _cache.put(symbol, deep_data)
+        _cache.put(deep_data)
         _cache.save()
 
     # 5. 生成報告

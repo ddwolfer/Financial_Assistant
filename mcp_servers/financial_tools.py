@@ -248,7 +248,7 @@ def fetch_deep_analysis(ticker: str, force_refresh: bool = False) -> dict:
 
     # 存入快取
     if use_cache:
-        cache.put(ticker, deep_data)
+        cache.put(deep_data)
         cache.save()
 
     return {
@@ -323,7 +323,7 @@ def generate_analysis_report(ticker: str, force_refresh: bool = False) -> dict:
 
         # 存入快取
         if use_cache:
-            cache.put(ticker, deep_data)
+            cache.put(deep_data)
             cache.save()
 
     # 生成報告
