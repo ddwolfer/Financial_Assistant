@@ -916,3 +916,129 @@ def _safe_get_df(ticker: yf.Ticker, attr_name: str) -> pd.DataFrame:
     except Exception as e:
         logger.debug("無法取得 %s.%s: %s", ticker.ticker, attr_name, e)
     return pd.DataFrame()
+
+
+# ============================================================
+# 深度數據快取
+# ============================================================
+
+import json
+import os
+from pathlib import Path
+
+from scripts.scanner.config import CacheConfig, DEFAULT_CACHE_CONFIG
+
+_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+
+# 深度分析快取使用獨立的檔案和設定
+DEEP_CACHE_CONFIG = CacheConfig(
+    ttl_seconds=86400,  # 24 小時
+    error_ttl_seconds=3600,  # 1 小時
+    cache_filename="deep_analysis_cache.json",
+)
+
+
+class DeepDataCache:
+    """
+    Layer 3 深度分析數據的 TTL 快取管理器。
+
+    與 MetricsCache 設計模式相同，但儲存 DeepAnalysisData。
+    快取檔案: data/deep_analysis_cache.json
+
+    使用方法：
+        cache = DeepDataCache()
+        cache.load()
+        cached = cache.get("AAPL")  # DeepAnalysisData 或 None
+        cache.put(deep_data)
+        cache.save()
+    """
+
+    def __init__(
+        self,
+        config: CacheConfig = DEEP_CACHE_CONFIG,
+        cache_dir: Optional[Path] = None,
+    ):
+        self._config = config
+        self._cache_dir = cache_dir or _CACHE_DIR
+        self._cache_path = self._cache_dir / config.cache_filename
+        self._data: dict[str, dict] = {}
+        self._dirty = False
+
+    def load(self) -> None:
+        """從磁碟載入快取檔案。損壞時建立空快取。"""
+        if not self._cache_path.exists():
+            self._data = {}
+            return
+
+        try:
+            with open(self._cache_path) as f:
+                self._data = json.load(f)
+            logger.debug("深度快取已載入: %d 筆資料", len(self._data))
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("深度快取檔案損壞，重建空快取: %s", e)
+            self._data = {}
+
+    def save(self) -> None:
+        """將記憶體快取寫回磁碟（dirty flag + atomic write）。"""
+        if not self._dirty:
+            return
+
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+
+        tmp_path = self._cache_path.with_suffix(".tmp")
+        with open(tmp_path, "w") as f:
+            json.dump(self._data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, self._cache_path)
+
+        self._dirty = False
+        logger.info("深度快取已存檔: %d 筆 -> %s", len(self._data), self._cache_path)
+
+    def get(self, symbol: str) -> Optional[DeepAnalysisData]:
+        """
+        查詢快取。回傳未過期的 DeepAnalysisData，或 None。
+
+        TTL：成功 24 小時，空數據 1 小時。
+        """
+        key = symbol.upper()
+        entry = self._data.get(key)
+        if entry is None:
+            return None
+
+        fetched_at = datetime.fromisoformat(entry["fetched_at"])
+        now = datetime.now(timezone.utc)
+        age_seconds = (now - fetched_at).total_seconds()
+
+        deep_data = DeepAnalysisData.from_dict(entry["deep_data"])
+
+        # 空數據（data_quality_score == 0）用較短 TTL
+        ttl = (
+            self._config.error_ttl_seconds
+            if deep_data.data_quality_score == 0.0
+            else self._config.ttl_seconds
+        )
+
+        if age_seconds > ttl:
+            logger.debug("深度快取已過期: %s (%.0f 秒前)", key, age_seconds)
+            return None
+
+        logger.debug("深度快取命中: %s (%.0f 秒前)", key, age_seconds)
+        return deep_data
+
+    def put(self, deep_data: DeepAnalysisData) -> None:
+        """寫入快取。"""
+        key = deep_data.symbol.upper()
+        self._data[key] = {
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "deep_data": deep_data.to_dict(),
+        }
+        self._dirty = True
+
+    def clear(self) -> None:
+        """清除所有快取。"""
+        self._data = {}
+        self._dirty = True
+
+    @property
+    def size(self) -> int:
+        """快取中的項目數量。"""
+        return len(self._data)

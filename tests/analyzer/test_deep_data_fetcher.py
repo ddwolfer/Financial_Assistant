@@ -746,3 +746,97 @@ class TestFetchDeepData:
         json_str = json.dumps(result.to_dict())
         restored = DeepAnalysisData.from_dict(json.loads(json_str))
         assert restored.symbol == "SER"
+
+
+# ============================================================
+# Task 5 測試：DeepDataCache 快取
+# ============================================================
+
+from scripts.analyzer.deep_data_fetcher import DeepDataCache, DEEP_CACHE_CONFIG
+
+
+class TestDeepDataCache:
+    """DeepDataCache 快取測試。"""
+
+    def test_put_and_get(self, tmp_path):
+        """put → get 應回傳相同數據。"""
+        cache = DeepDataCache(cache_dir=tmp_path)
+        data = _make_deep_analysis(symbol="AAPL")
+        cache.put(data)
+        cached = cache.get("AAPL")
+        assert cached is not None
+        assert cached.symbol == "AAPL"
+        assert cached.valuation.ev_to_ebitda == 12.5
+
+    def test_miss_returns_none(self, tmp_path):
+        """未快取的 symbol 應回傳 None。"""
+        cache = DeepDataCache(cache_dir=tmp_path)
+        assert cache.get("NOEXIST") is None
+
+    def test_case_insensitive(self, tmp_path):
+        """symbol 查詢應不分大小寫。"""
+        cache = DeepDataCache(cache_dir=tmp_path)
+        data = _make_deep_analysis(symbol="aapl")
+        cache.put(data)
+        assert cache.get("AAPL") is not None
+
+    def test_save_and_load(self, tmp_path):
+        """save → 新建 cache → load 應能復原。"""
+        cache1 = DeepDataCache(cache_dir=tmp_path)
+        cache1.put(_make_deep_analysis(symbol="MSFT"))
+        cache1.save()
+
+        cache2 = DeepDataCache(cache_dir=tmp_path)
+        cache2.load()
+        cached = cache2.get("MSFT")
+        assert cached is not None
+        assert cached.symbol == "MSFT"
+
+    def test_ttl_expiry(self, tmp_path):
+        """過期的數據應回傳 None。"""
+        from scripts.scanner.config import CacheConfig
+        config = CacheConfig(ttl_seconds=1, error_ttl_seconds=1,
+                             cache_filename="deep_analysis_cache.json")
+        cache = DeepDataCache(config=config, cache_dir=tmp_path)
+        cache.put(_make_deep_analysis(symbol="OLD"))
+
+        import time
+        time.sleep(1.1)
+        assert cache.get("OLD") is None
+
+    def test_empty_data_uses_error_ttl(self, tmp_path):
+        """空數據（quality=0）使用較短 TTL。"""
+        empty = DeepAnalysisData(
+            symbol="EMPTY", company_name="", sector="", industry="",
+            data_quality_score=0.0,
+        )
+        cache = DeepDataCache(cache_dir=tmp_path)
+        cache.put(empty)
+        # 應正常回傳（還沒過期）
+        cached = cache.get("EMPTY")
+        assert cached is not None
+        assert cached.data_quality_score == 0.0
+
+    def test_dirty_flag(self, tmp_path):
+        """沒有變更時 save 不應寫入磁碟。"""
+        cache = DeepDataCache(cache_dir=tmp_path)
+        cache.save()  # 沒有 dirty，不應建立檔案
+        cache_file = tmp_path / "deep_analysis_cache.json"
+        assert not cache_file.exists()
+
+    def test_clear(self, tmp_path):
+        """clear 後 get 應回傳 None。"""
+        cache = DeepDataCache(cache_dir=tmp_path)
+        cache.put(_make_deep_analysis(symbol="DEL"))
+        assert cache.get("DEL") is not None
+        cache.clear()
+        assert cache.get("DEL") is None
+        assert cache.size == 0
+
+    def test_corrupted_json(self, tmp_path):
+        """損壞的 JSON 應建立空快取。"""
+        cache_file = tmp_path / "deep_analysis_cache.json"
+        cache_file.write_text("NOT VALID JSON {{{")
+        cache = DeepDataCache(cache_dir=tmp_path)
+        cache.load()
+        assert cache.size == 0
