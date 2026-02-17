@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+/* 深色金融風全域配色 */
+:root {
+	--color-bg-primary: #0f1117;
+	--color-bg-card: #1a1d29;
+	--color-bg-hover: #252836;
+	--color-text-primary: #e4e7ec;
+	--color-text-secondary: #8b8fa3;
+	--color-accent: #3b82f6;
+	--color-positive: #22c55e;
+	--color-negative: #ef4444;
+	--color-warning: #f59e0b;
+	--color-border: #2d3142;
+}
+
+/* 捲軸樣式 */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+::-webkit-scrollbar-track {
+	background: var(--color-bg-primary);
+}
+::-webkit-scrollbar-thumb {
+	background: var(--color-border);
+	border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: #3d4258;
+}
