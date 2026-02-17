@@ -84,5 +84,14 @@ def test_mcp_server_has_sector_screening_tool():
 
     tool_names = [t.name for t in mcp._tool_manager._tools.values()]
     assert "run_sector_screening" in tool_names
-    # 確認總共有 4 個工具
-    assert len(tool_names) == 4
+
+
+def test_mcp_server_has_deep_analysis_tools():
+    """MCP 伺服器註冊了 Layer 3 深度分析工具。"""
+    from mcp_servers.financial_tools import mcp
+
+    tool_names = [t.name for t in mcp._tool_manager._tools.values()]
+    assert "fetch_deep_analysis" in tool_names
+    assert "generate_analysis_report" in tool_names
+    # 確認總共有 6 個工具（原 4 + 新 2）
+    assert len(tool_names) == 6

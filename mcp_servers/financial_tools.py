@@ -1,8 +1,7 @@
 """
 MCP Server: Financial Analysis Tools.
 
-Exposes tools for Claude to interact with the screening pipeline
-and data cache via the Model Context Protocol.
+提供 Claude 透過 MCP 協議操作篩選管線、數據快取和深度分析的工具。
 
 Run with: uv run python mcp_servers/financial_tools.py
 """
@@ -13,7 +12,13 @@ from fastmcp import FastMCP
 
 from scripts.scanner.data_fetcher import fetch_ticker_metrics
 from scripts.scanner.config import calculate_graham_number
-from scripts.scanner.results_store import load_latest_results
+from scripts.scanner.results_store import (
+    load_latest_results,
+    save_deep_analysis,
+    load_latest_deep_analysis,
+    load_latest_deep_analysis_report,
+    list_deep_analysis_symbols,
+)
 
 mcp = FastMCP("QuantAnalyst Financial Tools")
 
@@ -174,6 +179,175 @@ def run_sector_screening(
         "total_passed": len(passed),
         "sector_distribution": sector_dist,
         "passed_stocks": [r.to_dict() for r in passed],
+    }
+
+
+@mcp.tool
+def fetch_deep_analysis(ticker: str, force_refresh: bool = False) -> dict:
+    """
+    Execute deep analysis for a single ticker.
+
+    Fetches comprehensive financial data from yfinance (12 API endpoints),
+    performs peer comparison, and returns structured JSON data.
+    Results are cached for 24 hours unless force_refresh=True.
+
+    Returns the full DeepAnalysisData as a JSON dict, including:
+    - Valuation multiples (EV/EBITDA, P/E, P/B, analyst targets)
+    - Financial health (3-5 year history, balance sheet, cash flow)
+    - Growth momentum (EPS/revenue estimates, earnings surprises)
+    - Risk metrics (beta, short ratio, insider transactions)
+    - Peer comparison (5 industry peers ranked by key metrics)
+
+    Args:
+        ticker: Stock ticker symbol (e.g., "AAPL")
+        force_refresh: If True, ignore cache and re-fetch all data
+    """
+    from scripts.analyzer.deep_data_fetcher import (
+        fetch_deep_data,
+        DeepDataCache,
+    )
+    from scripts.analyzer.peer_finder import build_peer_comparison
+
+    cache = DeepDataCache()
+    use_cache = not force_refresh
+
+    # 檢查快取
+    if use_cache:
+        cache.load()
+        cached = cache.get(ticker)
+        if cached is not None:
+            return {
+                "success": True,
+                "source": "cache",
+                "data": cached.to_dict(),
+            }
+
+    # 抓取深度數據
+    try:
+        deep_data = fetch_deep_data(ticker)
+    except Exception as e:
+        return {"success": False, "error": f"抓取失敗: {e}"}
+
+    if not deep_data.company_name:
+        return {"success": False, "error": f"無法取得 {ticker} 的基礎數據"}
+
+    # 同業比較
+    if deep_data.sector and deep_data.industry:
+        try:
+            import yfinance as yf
+            target_info = yf.Ticker(ticker).info or {}
+            peer_data = build_peer_comparison(
+                symbol=ticker,
+                sector=deep_data.sector,
+                industry=deep_data.industry,
+                target_info=target_info,
+            )
+            deep_data.peer_comparison = peer_data
+        except Exception:
+            pass  # 同業比較失敗不影響主要分析
+
+    # 存入快取
+    if use_cache:
+        cache.put(ticker, deep_data)
+        cache.save()
+
+    return {
+        "success": True,
+        "source": "fresh",
+        "data": deep_data.to_dict(),
+    }
+
+
+@mcp.tool
+def generate_analysis_report(ticker: str, force_refresh: bool = False) -> dict:
+    """
+    Generate a complete analysis report for a ticker.
+
+    Runs deep analysis and produces both structured JSON and a
+    human-readable Markdown report. The report includes 6 sections:
+
+    T1: Valuation Report (DCF inputs, multiples, analyst targets)
+    T2: Financial Health Check (balance sheet, P&L trends, cash flow)
+    T3: Growth Momentum (growth rates, EPS estimates, earnings surprises)
+    T4: Risk & Scenario Analysis (volatility, short interest, insider trading)
+    T5: Peer Comparison (industry peers ranked by key metrics)
+    T6: Investment Decision Summary (4-dimensional assessment)
+
+    The Markdown report and JSON data are also saved to disk.
+
+    Args:
+        ticker: Stock ticker symbol (e.g., "AAPL")
+        force_refresh: If True, ignore cache and re-fetch all data
+    """
+    from scripts.analyzer.deep_data_fetcher import (
+        fetch_deep_data,
+        DeepDataCache,
+        DeepAnalysisData,
+    )
+    from scripts.analyzer.peer_finder import build_peer_comparison
+    from scripts.analyzer.report_generator import generate_report
+
+    cache = DeepDataCache()
+    use_cache = not force_refresh
+    deep_data = None
+
+    # 檢查快取
+    if use_cache:
+        cache.load()
+        deep_data = cache.get(ticker)
+
+    # 若無快取，重新抓取
+    if deep_data is None:
+        try:
+            deep_data = fetch_deep_data(ticker)
+        except Exception as e:
+            return {"success": False, "error": f"抓取失敗: {e}"}
+
+        if not deep_data.company_name:
+            return {"success": False, "error": f"無法取得 {ticker} 的基礎數據"}
+
+        # 同業比較
+        if deep_data.sector and deep_data.industry:
+            try:
+                import yfinance as yf
+                target_info = yf.Ticker(ticker).info or {}
+                peer_data = build_peer_comparison(
+                    symbol=ticker,
+                    sector=deep_data.sector,
+                    industry=deep_data.industry,
+                    target_info=target_info,
+                )
+                deep_data.peer_comparison = peer_data
+            except Exception:
+                pass
+
+        # 存入快取
+        if use_cache:
+            cache.put(ticker, deep_data)
+            cache.save()
+
+    # 生成報告
+    result = generate_report(deep_data)
+
+    # 持久化
+    try:
+        paths = save_deep_analysis(
+            symbol=ticker,
+            json_data=result["json_data"],
+            markdown_report=result["markdown_report"],
+        )
+        saved_files = {
+            "json_file": str(paths["json_path"]),
+            "markdown_file": str(paths["markdown_path"]),
+        }
+    except Exception:
+        saved_files = {}
+
+    return {
+        "success": True,
+        "summary": result["summary"],
+        "markdown_report": result["markdown_report"],
+        "saved_files": saved_files,
     }
 
 
