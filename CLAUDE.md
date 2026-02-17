@@ -49,6 +49,8 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 # 執行測試
 uv run pytest tests/ -v
 
+# === Layer 1 量化篩選 ===
+
 # 執行 Layer 1 篩選（指定股票）
 uv run python -m scripts.scanner.run_layer1 --tickers AAPL MSFT GOOGL
 
@@ -63,6 +65,22 @@ uv run python -m scripts.scanner.run_layer1 --universe sp1500 --mode dual
 
 # 強制重新抓取，忽略本地快取
 uv run python -m scripts.scanner.run_layer1 --universe sp500 --force-refresh
+
+# === Layer 3 深度分析 ===
+
+# 指定股票深度分析
+uv run python -m scripts.analyzer.run_layer3 --tickers AAPL MSFT
+
+# 從 Layer 1 結果自動載入分析
+uv run python -m scripts.analyzer.run_layer3 --from-layer1
+
+# 強制重新抓取
+uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
+
+# 指定同業比較範圍
+uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --universe sp1500 --peer-count 10
+
+# === MCP 伺服器 ===
 
 # 啟動 MCP 伺服器
 uv run python mcp_servers/financial_tools.py
@@ -85,16 +103,19 @@ uv run python mcp_servers/financial_tools.py
 - yfinance 的 `pegRatio` 自 2025 年 6 月起故障，需手動計算備案
 - yfinance 的 `debtToEquity` 回傳百分比（如 170.5），需除以 100 轉為比率
 - Yahoo Finance 有流量限制，批量抓取時需設定延遲（預設 0.1 秒）
-- 指標快取檔案位於 `data/metrics_cache.json`，預設 24 小時 TTL
+- Layer 1 指標快取: `data/metrics_cache.json`，預設 24 小時 TTL
+- Layer 3 深度分析快取: `data/deep_analysis_cache.json`，預設 24 小時 TTL
 - 失敗的抓取快取 1 小時後自動重試
 - 使用 `--force-refresh` 可強制重新抓取，忽略快取
+- Layer 3 每支股票抓取約 4 秒（12 個 yfinance API），15 支約 60 秒
+- 深度分析結果: JSON 存 `data/deep_analysis_*.json`，Markdown 存 `data/reports/*.md`
 
 ## 目錄結構
 ```
 Financial_Assistant/
 ├── .claude/skills/          # Claude Skills 定義
 ├── mcp_servers/             # MCP 伺服器（Python）
-│   └── financial_tools.py   # 四個金融工具（含雙軌制篩選）
+│   └── financial_tools.py   # 六個金融工具（篩選 + 深度分析）
 ├── scripts/
 │   ├── scanner/             # Layer 1 量化篩選器
 │   │   ├── config.py        # 篩選門檻設定（含 SectorRelativeThresholds、CacheConfig）
@@ -103,11 +124,43 @@ Financial_Assistant/
 │   │   ├── metrics_cache.py # TTL 快取管理器（24h/1h）
 │   │   ├── screener.py      # 絕對門檻篩選邏輯
 │   │   ├── sector_screener.py # 雙軌制產業相對篩選引擎
-│   │   ├── results_store.py # JSON 持久化
-│   │   └── run_layer1.py    # CLI 進入點（支援 --mode、--force-refresh）
-│   ├── analyzer/            # 數據清理（待開發）
-│   └── templates/           # 12 組分析範本（待開發）
+│   │   ├── results_store.py # JSON 持久化（Layer 1 + Layer 3）
+│   │   └── run_layer1.py    # Layer 1 CLI 進入點
+│   └── analyzer/            # Layer 3 深度分析模組
+│       ├── deep_data_fetcher.py  # 深度數據抓取（6 dataclass + yfinance 12 API + 快取）
+│       ├── peer_finder.py        # 同業比較器（找同業 + 批量抓取 + 排名）
+│       ├── report_generator.py   # Markdown 報告生成器（6 組模板 T1-T6）
+│       └── run_layer3.py         # Layer 3 CLI 進入點
 ├── data/                    # 本地數據暫存
-├── tests/                   # 測試套件（69 個測試）
+│   ├── metrics_cache.json          # Layer 1 指標快取
+│   ├── deep_analysis_cache.json    # Layer 3 深度分析快取
+│   ├── screening_*.json            # Layer 1 篩選結果
+│   ├── deep_analysis_*.json        # Layer 3 分析結果
+│   └── reports/                    # Layer 3 Markdown 報告
+│       └── deep_analysis_*.md
+├── tests/                   # 測試套件（247 個測試）
+│   ├── scanner/             # Layer 1 測試（69 個）
+│   ├── analyzer/            # Layer 3 測試（165 個）
+│   └── test_mcp_server.py   # MCP 伺服器測試（5 個）
 └── web/                     # Svelte 5 Dashboard（待開發）
 ```
+
+## Layer 3 分析模板（6 組）
+| # | 模板 | 分析重點 |
+|---|------|---------|
+| T1 | 價值估值報告 | DCF 參數 + 同業倍數 + 分析師目標價 |
+| T2 | 財務體質檢查 | 三表摘要 + 資產負債 + 現金流趨勢 |
+| T3 | 成長動能分析 | 營收/盈餘成長 + EPS 預估 + 盈餘驚喜 |
+| T4 | 風險與情境分析 | 波動性 + 放空 + 內部交易 + 機構持股 |
+| T5 | 同業競爭力排名 | 5+ 同業全面對比 + 各指標排名 |
+| T6 | 投資決策摘要 | 四維評估（估值/體質/成長/風險）|
+
+## MCP 工具清單（6 個）
+| 工具 | 功能 |
+|------|------|
+| `check_data_cache` | 檢查篩選快取 |
+| `fetch_missing_data` | 抓取基礎指標 |
+| `calculate_financial_metrics` | 計算 Graham Number + 篩選 |
+| `run_sector_screening` | 雙軌制產業篩選 |
+| `fetch_deep_analysis` | Layer 3 深度數據抓取 |
+| `generate_analysis_report` | 生成 6 組分析報告（JSON + Markdown）|
