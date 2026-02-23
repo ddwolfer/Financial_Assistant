@@ -113,7 +113,9 @@ uv run python mcp_servers/financial_tools.py
 ## 目錄結構
 ```
 Financial_Assistant/
-├── .claude/skills/          # Claude Skills 定義
+├── .claude/skills/
+│   ├── scan-market/SKILL.md    # /scan-market Skill（市場篩選 SOP）
+│   └── deep-analysis/SKILL.md  # /deep-analysis Skill（深度分析 SOP）
 ├── mcp_servers/             # MCP 伺服器（Python）
 │   └── financial_tools.py   # 六個金融工具（篩選 + 深度分析）
 ├── scripts/
@@ -154,6 +156,12 @@ Financial_Assistant/
 | T4 | 風險與情境分析 | 波動性 + 放空 + 內部交易 + 機構持股 |
 | T5 | 同業競爭力排名 | 5+ 同業全面對比 + 各指標排名 |
 | T6 | 投資決策摘要 | 四維評估（估值/體質/成長/風險）|
+
+## Claude Code Skills（2 個）
+| Skill | 功能 |
+|-------|------|
+| `/scan-market` | Layer 1 市場篩選 SOP（預設 S&P 1500，雙軌制） |
+| `/deep-analysis` | Layer 3 深度分析 SOP（6 組報告 + 同業比較） |
 
 ## MCP 工具清單（6 個）
 | 工具 | 功能 |
