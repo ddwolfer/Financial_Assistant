@@ -20,6 +20,9 @@ import logging
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()  # 載入 .env 環境變數
+
 from scripts.analyzer.deep_data_fetcher import (
     fetch_deep_data,
     DeepDataCache,
@@ -156,11 +159,11 @@ def _analyze_single(
 def _print_summary(results: list[dict]):
     """印出所有分析結果的摘要表格。"""
     if not results:
-        print("\n⚠️ 沒有成功完成分析的股票。")
+        print("\n[!] 沒有成功完成分析的股票。")
         return
 
     print("\n" + "=" * 80)
-    print("📊 Layer 3 深度分析摘要")
+    print("[Layer 3] 深度分析摘要")
     print("=" * 80)
 
     header = f"{'代碼':8s} | {'公司名稱':20s} | {'現價':>10s} | {'目標價':>10s} | {'上行空間':>8s} | {'推薦':8s} | {'品質':>5s}"

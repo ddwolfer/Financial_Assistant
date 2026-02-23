@@ -28,11 +28,10 @@ class TestAISummaryConfig:
         """預設值應正確設定。"""
         config = AISummaryConfig()
         assert config.enabled is True
-        assert "haiku" in config.primary_model
-        assert "sonnet" in config.fallback_model
-        assert config.max_tokens == 2048
+        assert "flash" in config.primary_model
+        assert config.max_tokens == 8192
         assert config.temperature == 0.3
-        assert config.timeout_seconds == 30.0
+        assert config.timeout_seconds == 60.0
 
     def test_frozen_immutable(self):
         """Config 應為不可變（frozen）。"""
@@ -65,10 +64,9 @@ class TestGenerateAiSummarySync:
     """generate_ai_summary_sync 函數測試。"""
 
     def test_no_api_key_returns_none(self):
-        """未設定 ANTHROPIC_API_KEY 應回傳 None。"""
+        """未設定 GEMINI_API_KEY 應回傳 None。"""
         with patch.dict(os.environ, {}, clear=True):
-            # 確保移除 ANTHROPIC_API_KEY
-            os.environ.pop("ANTHROPIC_API_KEY", None)
+            os.environ.pop("GEMINI_API_KEY", None)
             result = generate_ai_summary_sync(
                 report_markdown="test report",
                 symbol="AAPL",
@@ -76,16 +74,16 @@ class TestGenerateAiSummarySync:
             )
             assert result is None
 
-    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("scripts.analyzer.ai_summarizer.anthropic")
-    def test_successful_generation(self, mock_anthropic_module):
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("scripts.analyzer.ai_summarizer.genai")
+    def test_successful_generation(self, mock_genai):
         """成功呼叫 API 應回傳摘要文字。"""
         # 設定 mock
         mock_client = MagicMock()
-        mock_anthropic_module.Anthropic.return_value = mock_client
+        mock_genai.Client.return_value = mock_client
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="這是一段白話摘要。")]
-        mock_client.messages.create.return_value = mock_response
+        mock_response.text = "這是一段白話摘要。"
+        mock_client.models.generate_content.return_value = mock_response
 
         result = generate_ai_summary_sync(
             report_markdown="## T1: 價值估值報告\n| P/E | 15x |",
@@ -93,20 +91,20 @@ class TestGenerateAiSummarySync:
             company_name="Apple Inc.",
         )
         assert result == "這是一段白話摘要。"
-        mock_client.messages.create.assert_called_once()
+        mock_client.models.generate_content.assert_called_once()
 
-    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("scripts.analyzer.ai_summarizer.anthropic")
-    def test_primary_fails_fallback_succeeds(self, mock_anthropic_module):
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("scripts.analyzer.ai_summarizer.genai")
+    def test_primary_fails_fallback_succeeds(self, mock_genai):
         """主要模型失敗時應切換到備援模型。"""
         mock_client = MagicMock()
-        mock_anthropic_module.Anthropic.return_value = mock_client
+        mock_genai.Client.return_value = mock_client
 
-        # 第一次呼叫（Haiku）失敗，第二次（Sonnet）成功
+        # 第一次呼叫（Flash）失敗，第二次成功
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="備援模型的摘要。")]
-        mock_client.messages.create.side_effect = [
-            Exception("Haiku 連線逾時"),
+        mock_response.text = "備援模型的摘要。"
+        mock_client.models.generate_content.side_effect = [
+            Exception("Flash 連線逾時"),
             mock_response,
         ]
 
@@ -116,15 +114,15 @@ class TestGenerateAiSummarySync:
             company_name="Test Corp",
         )
         assert result == "備援模型的摘要。"
-        assert mock_client.messages.create.call_count == 2
+        assert mock_client.models.generate_content.call_count == 2
 
-    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("scripts.analyzer.ai_summarizer.anthropic")
-    def test_all_models_fail_returns_none(self, mock_anthropic_module):
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("scripts.analyzer.ai_summarizer.genai")
+    def test_all_models_fail_returns_none(self, mock_genai):
         """所有模型都失敗應回傳 None。"""
         mock_client = MagicMock()
-        mock_anthropic_module.Anthropic.return_value = mock_client
-        mock_client.messages.create.side_effect = Exception("全部失敗")
+        mock_genai.Client.return_value = mock_client
+        mock_client.models.generate_content.side_effect = Exception("全部失敗")
 
         result = generate_ai_summary_sync(
             report_markdown="test",
@@ -132,30 +130,25 @@ class TestGenerateAiSummarySync:
             company_name="Test Corp",
         )
         assert result is None
-        assert mock_client.messages.create.call_count == 2
+        assert mock_client.models.generate_content.call_count == 2
 
-    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("scripts.analyzer.ai_summarizer.anthropic")
-    def test_timeout_config_passed_to_client(self, mock_anthropic_module):
-        """timeout 設定應傳遞給 Anthropic client。"""
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("scripts.analyzer.ai_summarizer.genai")
+    def test_api_key_passed_to_client(self, mock_genai):
+        """GEMINI_API_KEY 應傳遞給 Client。"""
         mock_client = MagicMock()
-        mock_anthropic_module.Anthropic.return_value = mock_client
+        mock_genai.Client.return_value = mock_client
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="ok")]
-        mock_client.messages.create.return_value = mock_response
+        mock_response.text = "ok"
+        mock_client.models.generate_content.return_value = mock_response
 
-        config = AISummaryConfig(timeout_seconds=15.0)
         generate_ai_summary_sync(
             report_markdown="test",
             symbol="TEST",
             company_name="Test",
-            config=config,
         )
 
-        mock_anthropic_module.Anthropic.assert_called_with(
-            api_key="test-key",
-            timeout=15.0,
-        )
+        mock_genai.Client.assert_called_with(api_key="test-key")
 
 
 # ============================================================

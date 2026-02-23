@@ -1,7 +1,7 @@
 """
 AI 白話分析摘要生成器
 
-使用 Anthropic Claude API 將專業金融分析報告轉化為
+使用 Google Gemini API 將專業金融分析報告轉化為
 一般人容易理解的繁體中文白話文摘要。
 """
 
@@ -9,7 +9,8 @@ import os
 import logging
 from dataclasses import dataclass
 
-import anthropic
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,11 @@ class AISummaryConfig:
     """AI 摘要生成器設定"""
 
     enabled: bool = True
-    primary_model: str = "claude-haiku-4-5-20251001"
-    fallback_model: str = "claude-sonnet-4-20250514"
-    max_tokens: int = 2048
+    primary_model: str = "gemini-2.5-flash"
+    fallback_model: str = "gemini-3-flash-preview"
+    max_tokens: int = 8192
     temperature: float = 0.3
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 60.0
 
 
 # 預設設定
@@ -60,7 +61,7 @@ def generate_ai_summary_sync(
     config: AISummaryConfig = DEFAULT_AI_SUMMARY_CONFIG,
 ) -> str | None:
     """
-    呼叫 Anthropic Claude API 生成白話文分析摘要。
+    呼叫 Google Gemini API 生成白話文分析摘要。
 
     Args:
         report_markdown: 完整的 T1-T6 Markdown 報告內容
@@ -71,9 +72,9 @@ def generate_ai_summary_sync(
     Returns:
         白話文摘要字串，失敗時回傳 None
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        logger.warning("未設定 ANTHROPIC_API_KEY 環境變數，跳過 AI 白話摘要")
+        logger.warning("未設定 GEMINI_API_KEY 環境變數，跳過 AI 白話摘要")
         return None
 
     user_message = (
@@ -84,29 +85,31 @@ def generate_ai_summary_sync(
     # 嘗試主要模型，失敗後切換備援模型
     models_to_try = [config.primary_model, config.fallback_model]
 
-    for model in models_to_try:
+    for model_name in models_to_try:
         try:
-            logger.info(f"使用 {model} 生成 {symbol} 白話摘要...")
-            client = anthropic.Anthropic(
-                api_key=api_key,
-                timeout=config.timeout_seconds,
+            logger.info(f"使用 {model_name} 生成 {symbol} 白話摘要...")
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=user_message,
+                config=types.GenerateContentConfig(
+                    system_instruction=_SYSTEM_PROMPT,
+                    max_output_tokens=config.max_tokens,
+                    temperature=config.temperature,
+                    http_options=types.HttpOptions(
+                        timeout=int(config.timeout_seconds * 1000),
+                    ),
+                ),
             )
-            response = client.messages.create(
-                model=model,
-                max_tokens=config.max_tokens,
-                temperature=config.temperature,
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            summary_text = response.content[0].text
+            summary_text = response.text
             logger.info(
-                f"{symbol} 白話摘要生成完成 (模型: {model}, "
+                f"{symbol} 白話摘要生成完成 (模型: {model_name}, "
                 f"字數: {len(summary_text)})"
             )
             return summary_text
 
         except Exception as e:
-            logger.warning(f"{model} 生成 {symbol} 白話摘要失敗: {e}")
+            logger.warning(f"{model_name} 生成 {symbol} 白話摘要失敗: {e}")
             continue
 
     logger.error(f"所有模型均無法生成 {symbol} 白話摘要")
