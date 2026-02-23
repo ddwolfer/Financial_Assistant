@@ -18,6 +18,7 @@ Layer 3 深度分析 CLI 進入點。
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from scripts.analyzer.deep_data_fetcher import (
     fetch_deep_data,
@@ -30,6 +31,9 @@ from scripts.scanner.results_store import (
     load_latest_results,
     save_deep_analysis,
 )
+
+# 報告輸出目錄
+REPORTS_DIR = Path("data/reports")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,6 +77,8 @@ def _analyze_single(
     universe: str = "sp500",
     peer_count: int = 5,
     use_cache: bool = True,
+    ai_summary: bool = True,
+    include_chart: bool = True,
 ) -> dict | None:
     """
     對單一股票執行完整深度分析流程。
@@ -87,7 +93,12 @@ def _analyze_single(
         cached = _cache.get(symbol)
         if cached is not None:
             logger.info("[快取命中] %s，直接生成報告", symbol)
-            result = generate_report(cached)
+            result = generate_report(
+                cached,
+                ai_summary=ai_summary,
+                include_chart=include_chart,
+                output_dir=REPORTS_DIR,
+            )
             return result
 
     # 2. 抓取深度數據
@@ -124,7 +135,12 @@ def _analyze_single(
         _cache.save()
 
     # 5. 生成報告
-    result = generate_report(deep_data)
+    result = generate_report(
+        deep_data,
+        ai_summary=ai_summary,
+        include_chart=include_chart,
+        output_dir=REPORTS_DIR,
+    )
 
     # 6. 持久化
     paths = save_deep_analysis(
@@ -192,6 +208,14 @@ def main():
         "--force-refresh", action="store_true", default=False,
         help="強制重新抓取所有資料，忽略快取",
     )
+    parser.add_argument(
+        "--no-ai-summary", action="store_true", default=False,
+        help="停用 AI 白話摘要（T0）",
+    )
+    parser.add_argument(
+        "--no-chart", action="store_true", default=False,
+        help="停用價格走勢圖",
+    )
     args = parser.parse_args()
 
     # 取得分析目標
@@ -206,12 +230,16 @@ def main():
         return
 
     use_cache = not args.force_refresh
+    ai_summary = not args.no_ai_summary
+    include_chart = not args.no_chart
 
     logger.info("=" * 60)
     logger.info("Layer 3 深度分析開始")
     logger.info("分析目標: %d 支股票: %s", len(tickers), tickers)
     logger.info("同業比較範圍: %s, 每支 %d 個同業", args.universe, args.peer_count)
     logger.info("快取: %s", "啟用" if use_cache else "停用 (--force-refresh)")
+    logger.info("AI 白話摘要: %s", "啟用" if ai_summary else "停用")
+    logger.info("價格走勢圖: %s", "啟用" if include_chart else "停用")
     logger.info("=" * 60)
 
     # 載入快取
@@ -228,6 +256,8 @@ def main():
                 universe=args.universe,
                 peer_count=args.peer_count,
                 use_cache=use_cache,
+                ai_summary=ai_summary,
+                include_chart=include_chart,
             )
             if result:
                 results.append(result)

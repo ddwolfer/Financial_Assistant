@@ -775,7 +775,7 @@ class TestGenerateReport:
     def test_returns_three_keys(self):
         """回傳應包含 json_data, markdown_report, summary 三個 key。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         assert "json_data" in result
         assert "markdown_report" in result
         assert "summary" in result
@@ -783,14 +783,14 @@ class TestGenerateReport:
     def test_json_data_is_dict(self):
         """json_data 應為字典。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         assert isinstance(result["json_data"], dict)
         assert result["json_data"]["symbol"] == "TEST"
 
     def test_markdown_report_contains_all_sections(self):
         """Markdown 報告應包含所有 6 個模板的標題。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         md = result["markdown_report"]
         assert "T1: 價值估值報告" in md
         assert "T2: 財務體質檢查" in md
@@ -802,14 +802,14 @@ class TestGenerateReport:
     def test_markdown_report_header(self):
         """Markdown 報告應有總標題。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         md = result["markdown_report"]
         assert "# 深度分析報告: Test Corp (TEST)" in md
 
     def test_markdown_report_metadata(self):
         """Markdown 報告應包含元資料（產業、市值、日期）。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         md = result["markdown_report"]
         assert "Technology" in md
         assert "$50.0B" in md
@@ -818,7 +818,7 @@ class TestGenerateReport:
     def test_summary_contains_key_fields(self):
         """summary 應包含關鍵決策欄位。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         s = result["summary"]
         assert s["symbol"] == "TEST"
         assert s["company_name"] == "Test Corp"
@@ -830,7 +830,7 @@ class TestGenerateReport:
     def test_summary_upside_calculation(self):
         """summary 的上行空間應正確計算。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         # target 180 / price 150 - 1 = 0.2 → 20%
         assert abs(result["summary"]["upside_pct"] - 20.0) < 0.1
 
@@ -839,19 +839,19 @@ class TestGenerateReport:
         data = _make_deep_analysis(
             valuation=_make_valuation(target_price_mean=None)
         )
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         assert result["summary"]["upside_pct"] is None
 
     def test_summary_upside_none_when_no_price(self):
         """無現價時 upside_pct 應為 None。"""
         data = _make_deep_analysis(current_price=None)
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         assert result["summary"]["upside_pct"] is None
 
     def test_t6_summary_comes_first(self):
         """T6 投資決策摘要應出現在其他模板之前。"""
         data = _make_deep_analysis()
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         md = result["markdown_report"]
         t6_pos = md.index("T6: 投資決策摘要")
         t1_pos = md.index("T1: 價值估值報告")
@@ -865,7 +865,40 @@ class TestGenerateReport:
             sector="Unknown",
             industry="Unknown",
         )
-        result = generate_report(data)
+        result = generate_report(data, ai_summary=False)
         assert result["json_data"]["symbol"] == "EMPTY"
         assert isinstance(result["markdown_report"], str)
         assert len(result["markdown_report"]) > 0
+
+    def test_returns_five_keys(self):
+        """回傳應包含 5 個 key（含 ai_summary 和 chart_path）。"""
+        data = _make_deep_analysis()
+        result = generate_report(data, ai_summary=False)
+        assert "json_data" in result
+        assert "markdown_report" in result
+        assert "summary" in result
+        assert "ai_summary" in result
+        assert "chart_path" in result
+
+    def test_ai_summary_false_skips_t0(self):
+        """ai_summary=False 時報告不應包含 T0。"""
+        data = _make_deep_analysis()
+        result = generate_report(data, ai_summary=False)
+        md = result["markdown_report"]
+        assert "T0: 白話分析摘要" not in md
+        assert result["ai_summary"] is None
+
+    def test_chart_without_output_dir_returns_none(self):
+        """未提供 output_dir 時 chart_path 應為 None。"""
+        data = _make_deep_analysis()
+        data.price_history = {"dates": ["2026-01-01"], "closes": [100.0]}
+        result = generate_report(data, ai_summary=False, include_chart=True)
+        assert result["chart_path"] is None
+
+    def test_chart_false_skips_chart(self):
+        """include_chart=False 時不應生成圖表。"""
+        data = _make_deep_analysis()
+        data.price_history = {"dates": ["2026-01-01"], "closes": [100.0]}
+        result = generate_report(data, ai_summary=False, include_chart=False)
+        assert result["chart_path"] is None
+        assert "價格走勢" not in result["markdown_report"]

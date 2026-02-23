@@ -259,14 +259,20 @@ def fetch_deep_analysis(ticker: str, force_refresh: bool = False) -> dict:
 
 
 @mcp.tool
-def generate_analysis_report(ticker: str, force_refresh: bool = False) -> dict:
+def generate_analysis_report(
+    ticker: str,
+    force_refresh: bool = False,
+    ai_summary: bool = True,
+    include_chart: bool = True,
+) -> dict:
     """
     Generate a complete analysis report for a ticker.
 
     Runs deep analysis and produces both structured JSON and a
     human-readable Markdown report. The report includes 6 sections:
 
-    T1: Valuation Report (DCF inputs, multiples, analyst targets)
+    T0: AI Plain-Language Summary (optional, requires ANTHROPIC_API_KEY)
+    T1: Valuation Report (DCF inputs, multiples, analyst targets, price chart)
     T2: Financial Health Check (balance sheet, P&L trends, cash flow)
     T3: Growth Momentum (growth rates, EPS estimates, earnings surprises)
     T4: Risk & Scenario Analysis (volatility, short interest, insider trading)
@@ -278,6 +284,8 @@ def generate_analysis_report(ticker: str, force_refresh: bool = False) -> dict:
     Args:
         ticker: Stock ticker symbol (e.g., "AAPL")
         force_refresh: If True, ignore cache and re-fetch all data
+        ai_summary: If True (default), generate AI plain-language summary (T0)
+        include_chart: If True (default), generate 6-month price chart in T1
     """
     from scripts.analyzer.deep_data_fetcher import (
         fetch_deep_data,
@@ -327,7 +335,14 @@ def generate_analysis_report(ticker: str, force_refresh: bool = False) -> dict:
             cache.save()
 
     # 生成報告
-    result = generate_report(deep_data)
+    from pathlib import Path
+    reports_dir = Path("data/reports")
+    result = generate_report(
+        deep_data,
+        ai_summary=ai_summary,
+        include_chart=include_chart,
+        output_dir=reports_dir,
+    )
 
     # 持久化
     try:
@@ -347,6 +362,8 @@ def generate_analysis_report(ticker: str, force_refresh: bool = False) -> dict:
         "success": True,
         "summary": result["summary"],
         "markdown_report": result["markdown_report"],
+        "ai_summary": result.get("ai_summary"),
+        "chart_path": result.get("chart_path"),
         "saved_files": saved_files,
     }
 

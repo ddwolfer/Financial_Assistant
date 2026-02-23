@@ -232,3 +232,40 @@ class TestMainArgParsing:
 
         with patch("sys.argv", ["run_layer3", "--tickers", "FAIL"]):
             main()  # 不應拋出例外
+
+    @patch("scripts.analyzer.run_layer3._analyze_single")
+    @patch("scripts.analyzer.run_layer3._cache")
+    def test_no_ai_summary_flag(self, mock_cache, mock_analyze):
+        """--no-ai-summary 應停用 AI 摘要。"""
+        mock_analyze.return_value = None
+
+        with patch("sys.argv", ["run_layer3", "--tickers", "AAPL", "--no-ai-summary"]):
+            main()
+
+        call_kwargs = mock_analyze.call_args[1]
+        assert call_kwargs["ai_summary"] is False
+
+    @patch("scripts.analyzer.run_layer3._analyze_single")
+    @patch("scripts.analyzer.run_layer3._cache")
+    def test_no_chart_flag(self, mock_cache, mock_analyze):
+        """--no-chart 應停用價格走勢圖。"""
+        mock_analyze.return_value = None
+
+        with patch("sys.argv", ["run_layer3", "--tickers", "AAPL", "--no-chart"]):
+            main()
+
+        call_kwargs = mock_analyze.call_args[1]
+        assert call_kwargs["include_chart"] is False
+
+    @patch("scripts.analyzer.run_layer3._analyze_single")
+    @patch("scripts.analyzer.run_layer3._cache")
+    def test_default_ai_summary_enabled(self, mock_cache, mock_analyze):
+        """預設應啟用 AI 摘要和圖表。"""
+        mock_analyze.return_value = None
+
+        with patch("sys.argv", ["run_layer3", "--tickers", "AAPL"]):
+            main()
+
+        call_kwargs = mock_analyze.call_args[1]
+        assert call_kwargs["ai_summary"] is True
+        assert call_kwargs["include_chart"] is True

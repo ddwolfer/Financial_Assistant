@@ -337,6 +337,10 @@ class DeepAnalysisData:
     risk_metrics: RiskMetricsData = field(default_factory=RiskMetricsData)
     peer_comparison: PeerComparisonData = field(default_factory=PeerComparisonData)
 
+    # 增強功能數據
+    ai_summary_text: Optional[str] = None  # AI 白話摘要快取
+    price_history: Optional[dict] = None  # 價格歷史 {"dates": [...], "closes": [...]}
+
     # 元資料
     fetched_at: str = ""
     data_quality_score: float = 0.0  # 0-1，非 None 欄位比例
@@ -358,6 +362,8 @@ class DeepAnalysisData:
             "growth_momentum": self.growth_momentum.to_dict(),
             "risk_metrics": self.risk_metrics.to_dict(),
             "peer_comparison": self.peer_comparison.to_dict(),
+            "ai_summary_text": self.ai_summary_text,
+            "price_history": self.price_history,
             "fetched_at": self.fetched_at,
             "data_quality_score": self.data_quality_score,
         }
@@ -386,6 +392,8 @@ class DeepAnalysisData:
             peer_comparison=PeerComparisonData.from_dict(
                 data.get("peer_comparison", {})
             ),
+            ai_summary_text=data.get("ai_summary_text"),
+            price_history=data.get("price_history"),
             fetched_at=data.get("fetched_at", ""),
             data_quality_score=data.get("data_quality_score", 0.0),
         )
@@ -844,7 +852,14 @@ def fetch_deep_data(
                 fetched_at=datetime.now(timezone.utc).isoformat(),
             )
 
-            # 5. 計算數據品質分數
+            # 5. 價格歷史（用於走勢圖）
+            try:
+                from scripts.analyzer.price_chart import fetch_price_history
+                deep_data.price_history = fetch_price_history(symbol) or None
+            except Exception as price_err:
+                logger.warning("%s 價格歷史抓取失敗: %s", symbol, price_err)
+
+            # 6. 計算數據品質分數
             deep_data.data_quality_score = calculate_data_quality_score(deep_data)
 
             logger.info(

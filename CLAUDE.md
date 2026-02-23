@@ -80,6 +80,12 @@ uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
 # 指定同業比較範圍
 uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --universe sp1500 --peer-count 10
 
+# 停用 AI 白話摘要
+uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --no-ai-summary
+
+# 停用價格走勢圖
+uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --no-chart
+
 # === MCP 伺服器 ===
 
 # 啟動 MCP 伺服器
@@ -109,6 +115,10 @@ uv run python mcp_servers/financial_tools.py
 - 使用 `--force-refresh` 可強制重新抓取，忽略快取
 - Layer 3 每支股票抓取約 4 秒（12 個 yfinance API），15 支約 60 秒
 - 深度分析結果: JSON 存 `data/deep_analysis_*.json`，Markdown 存 `data/reports/*.md`
+- AI 白話摘要需設定 `ANTHROPIC_API_KEY` 環境變數，未設定時自動跳過
+- AI 摘要使用 Haiku 為主（~$0.001/支），Sonnet 為備援
+- 價格走勢圖 PNG 存於 `data/reports/charts/`，嵌入 T1 報告
+- 使用 `--no-ai-summary` 停用 AI 白話摘要，`--no-chart` 停用走勢圖
 
 ## 目錄結構
 ```
@@ -129,9 +139,11 @@ Financial_Assistant/
 │   │   ├── results_store.py # JSON 持久化（Layer 1 + Layer 3）
 │   │   └── run_layer1.py    # Layer 1 CLI 進入點
 │   └── analyzer/            # Layer 3 深度分析模組
+│       ├── ai_summarizer.py      # AI 白話摘要生成器（Claude API, Haiku/Sonnet）
 │       ├── deep_data_fetcher.py  # 深度數據抓取（6 dataclass + yfinance 12 API + 快取）
 │       ├── peer_finder.py        # 同業比較器（找同業 + 批量抓取 + 排名）
-│       ├── report_generator.py   # Markdown 報告生成器（6 組模板 T1-T6）
+│       ├── price_chart.py        # 價格走勢圖生成器（matplotlib PNG）
+│       ├── report_generator.py   # Markdown 報告生成器（7 組模板 T0-T6）
 │       └── run_layer3.py         # Layer 3 CLI 進入點
 ├── data/                    # 本地數據暫存
 │   ├── metrics_cache.json          # Layer 1 指標快取
@@ -139,18 +151,20 @@ Financial_Assistant/
 │   ├── screening_*.json            # Layer 1 篩選結果
 │   ├── deep_analysis_*.json        # Layer 3 分析結果
 │   └── reports/                    # Layer 3 Markdown 報告
-│       └── deep_analysis_*.md
-├── tests/                   # 測試套件（247 個測試）
+│       ├── deep_analysis_*.md
+│       └── charts/                     # 價格走勢圖 PNG
+├── tests/                   # 測試套件（283 個測試）
 │   ├── scanner/             # Layer 1 測試（69 個）
-│   ├── analyzer/            # Layer 3 測試（165 個）
+│   ├── analyzer/            # Layer 3 測試（201 個）
 │   └── test_mcp_server.py   # MCP 伺服器測試（5 個）
 └── web/                     # Svelte 5 Dashboard（待開發）
 ```
 
-## Layer 3 分析模板（6 組）
+## Layer 3 分析模板（7 組）
 | # | 模板 | 分析重點 |
 |---|------|---------|
-| T1 | 價值估值報告 | DCF 參數 + 同業倍數 + 分析師目標價 |
+| T0 | AI 白話分析摘要 | Claude API 自動生成的白話文解讀（可停用） |
+| T1 | 價值估值報告 | 價格走勢圖 + DCF 參數 + 同業倍數 + 分析師目標價 |
 | T2 | 財務體質檢查 | 三表摘要 + 資產負債 + 現金流趨勢 |
 | T3 | 成長動能分析 | 營收/盈餘成長 + EPS 預估 + 盈餘驚喜 |
 | T4 | 風險與情境分析 | 波動性 + 放空 + 內部交易 + 機構持股 |

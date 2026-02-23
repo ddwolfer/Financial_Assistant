@@ -3,7 +3,7 @@ name: deep-analysis
 description: >
   深度分析 SOP — 對指定股票執行完整深度分析，產出投行等級報告。
   使用時機：當用戶說「分析 AAPL」「深度報告」「跑 Layer 3」「幫我看這支股票」「deep analysis」「產出報告」。
-  包含 6 組分析模板（估值/體質/成長/風險/同業/決策摘要），輸出 JSON + Markdown 雙軌報告。
+  包含 7 組分析模板（AI白話摘要/估值/體質/成長/風險/同業/決策摘要），輸出 JSON + Markdown 雙軌報告。
 argument-hint: "[TICKER ...]"
 allowed-tools: Bash, Read, Glob, Grep
 ---
@@ -58,6 +58,8 @@ uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
 呼叫 `generate_analysis_report` 工具：
 - `ticker`: 股票代碼
 - `force_refresh`: false
+- `ai_summary`: true（預設生成 AI 白話摘要，需 ANTHROPIC_API_KEY）
+- `include_chart`: true（預設生成 6 個月價格走勢圖）
 
 **方式 B — CLI 備援：**
 
@@ -65,7 +67,11 @@ uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
 
 ### Step 4: 呈現結果
 
-**首先呈現 T6 投資決策摘要：**
+**首先呈現 T0 白話分析摘要（如有）：**
+
+AI 自動生成的白話文解讀，讓非財金背景的用戶也能快速理解。
+
+**然後呈現 T6 投資決策摘要：**
 
 四維評估概覽：
 - 估值面：[評分/摘要]
@@ -76,7 +82,7 @@ uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
 **然後詢問用戶：**
 
 > 「要查看哪個模板的完整報告？」
-> - T1 價值估值報告 — DCF 參數、估值倍數、分析師目標價
+> - T1 價值估值報告 — 價格走勢圖、DCF 參數、估值倍數、分析師目標價
 > - T2 財務體質檢查 — 三表摘要、資產負債表、現金流趨勢
 > - T3 成長動能分析 — 營收/盈餘成長、EPS 預估、盈餘驚喜
 > - T4 風險與情境分析 — 波動性、放空比率、內部交易、機構持股
@@ -116,6 +122,8 @@ uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
 
 - 深度數據抓取：`scripts/analyzer/deep_data_fetcher.py`
 - 同業比較器：`scripts/analyzer/peer_finder.py`
-- 報告生成器：`scripts/analyzer/report_generator.py`（6 組模板 T1-T6）
-- CLI 進入點：`scripts/analyzer/run_layer3.py`
+- AI 白話摘要：`scripts/analyzer/ai_summarizer.py`（Claude API, Haiku/Sonnet）
+- 價格走勢圖：`scripts/analyzer/price_chart.py`（matplotlib PNG）
+- 報告生成器：`scripts/analyzer/report_generator.py`（7 組模板 T0-T6）
+- CLI 進入點：`scripts/analyzer/run_layer3.py`（`--no-ai-summary`、`--no-chart` 可停用）
 - MCP 工具：`mcp_servers/financial_tools.py`（fetch_deep_analysis, generate_analysis_report）

@@ -6,9 +6,17 @@
 """
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from scripts.analyzer.deep_data_fetcher import DeepAnalysisData
+from scripts.analyzer.ai_summarizer import (
+    AISummaryConfig,
+    DEFAULT_AI_SUMMARY_CONFIG,
+    generate_ai_summary_sync,
+    render_t0_ai_summary,
+)
+from scripts.analyzer.price_chart import generate_price_chart
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +75,14 @@ def _fmt_ratio(value: Optional[float], decimals: int = 1) -> str:
 # T1: 價值估值報告
 # ============================================================
 
-def _render_t1_valuation(data: DeepAnalysisData) -> str:
+def _render_t1_valuation(data: DeepAnalysisData, chart_markdown: str = "") -> str:
     """渲染 T1 價值估值報告。"""
     v = data.valuation
+
+    # 價格走勢圖（插入在估值倍數表格之前）
+    chart_section = ""
+    if chart_markdown:
+        chart_section = f"\n{chart_markdown}\n"
 
     # 分析師目標價段落
     target_section = ""
@@ -115,7 +128,7 @@ def _render_t1_valuation(data: DeepAnalysisData) -> str:
 """
 
     return f"""## T1: 價值估值報告 — {data.company_name} ({data.symbol})
-
+{chart_section}
 ### 基礎估值倍數
 | 指標 | 數值 |
 |------|------|
@@ -459,31 +472,83 @@ def _render_t6_investment_summary(data: DeepAnalysisData) -> str:
 # 主生成函數
 # ============================================================
 
-def generate_report(data: DeepAnalysisData) -> dict:
+def generate_report(
+    data: DeepAnalysisData,
+    ai_summary: bool = True,
+    ai_summary_config: AISummaryConfig = DEFAULT_AI_SUMMARY_CONFIG,
+    include_chart: bool = True,
+    output_dir: Path | None = None,
+) -> dict:
     """
     生成完整的分析報告。
 
     Args:
         data: DeepAnalysisData 深度分析數據
+        ai_summary: 是否生成 AI 白話摘要（T0）
+        ai_summary_config: AI 摘要設定
+        include_chart: 是否生成價格走勢圖
+        output_dir: 報告輸出目錄（圖表存檔用）
 
     Returns:
         {
             "json_data": dict,        # 結構化 JSON（供 Dashboard）
             "markdown_report": str,    # 完整 Markdown 報告
             "summary": dict,           # T6 投資決策摘要的關鍵數據
+            "ai_summary": str | None,  # AI 白話摘要文字
+            "chart_path": str | None,  # 圖表相對路徑
         }
     """
-    # 渲染各模板
-    sections = [
-        _render_t6_investment_summary(data),  # 摘要放最前面
-        _render_t1_valuation(data),
-        _render_t2_financial_health(data),
-        _render_t3_growth_momentum(data),
-        _render_t4_risk_scenario(data),
-        _render_t5_peer_comparison(data),
-    ]
+    # 1. 生成價格走勢圖
+    chart_path = None
+    chart_markdown = ""
+    if include_chart and data.price_history and output_dir:
+        chart_path = generate_price_chart(
+            symbol=data.symbol,
+            company_name=data.company_name,
+            price_history=data.price_history,
+            output_dir=output_dir,
+        )
+        if chart_path:
+            chart_markdown = f"![{data.symbol} 價格走勢]({chart_path})"
 
-    # 組裝完整報告
+    # 2. 渲染 T1-T6 各模板
+    t6 = _render_t6_investment_summary(data)
+    t1 = _render_t1_valuation(data, chart_markdown=chart_markdown)
+    t2 = _render_t2_financial_health(data)
+    t3 = _render_t3_growth_momentum(data)
+    t4 = _render_t4_risk_scenario(data)
+    t5 = _render_t5_peer_comparison(data)
+
+    body_sections = [t6, t1, t2, t3, t4, t5]
+
+    # 3. AI 白話摘要（需要完整 T1-T6 做為輸入）
+    ai_summary_text = None
+    t0_section = None
+    if ai_summary and ai_summary_config.enabled:
+        # 組裝 T1-T6 文字供 AI 參考
+        t1_to_t6_text = "\n---\n\n".join(body_sections)
+
+        # 使用快取或生成新摘要
+        if data.ai_summary_text:
+            ai_summary_text = data.ai_summary_text
+        else:
+            ai_summary_text = generate_ai_summary_sync(
+                report_markdown=t1_to_t6_text,
+                symbol=data.symbol,
+                company_name=data.company_name,
+                config=ai_summary_config,
+            )
+            # 快取至 data 物件
+            if ai_summary_text:
+                data.ai_summary_text = ai_summary_text
+
+        t0_section = render_t0_ai_summary(
+            summary_text=ai_summary_text,
+            symbol=data.symbol,
+            company_name=data.company_name,
+        )
+
+    # 4. 組裝完整報告
     header = f"""# 深度分析報告: {data.company_name} ({data.symbol})
 
 > 產業: {data.sector} > {data.industry} | 市值: {_fmt_large(data.market_cap)} | 報告日期: {data.fetched_at[:10] if data.fetched_at else 'N/A'}
@@ -491,7 +556,12 @@ def generate_report(data: DeepAnalysisData) -> dict:
 ---
 """
 
-    markdown_report = header + "\n---\n\n".join(sections)
+    # 組裝順序：header → T0（如有）→ T6 → T1-T5
+    report_parts = [header]
+    if t0_section:
+        report_parts.append(t0_section)
+    report_parts.append("\n---\n\n".join(body_sections))
+    markdown_report = "".join(report_parts)
 
     # 投資摘要數據
     v = data.valuation
@@ -517,4 +587,6 @@ def generate_report(data: DeepAnalysisData) -> dict:
         "json_data": data.to_dict(),
         "markdown_report": markdown_report,
         "summary": summary,
+        "ai_summary": ai_summary_text,
+        "chart_path": chart_path,
     }
