@@ -115,8 +115,8 @@ uv run python mcp_servers/financial_tools.py
 - 使用 `--force-refresh` 可強制重新抓取，忽略快取
 - Layer 3 每支股票抓取約 4 秒（12 個 yfinance API），15 支約 60 秒
 - 深度分析結果: JSON 存 `data/deep_analysis_*.json`，Markdown 存 `data/reports/*.md`
-- AI 白話摘要需設定 `ANTHROPIC_API_KEY` 環境變數，未設定時自動跳過
-- AI 摘要使用 Haiku 為主（~$0.001/支），Sonnet 為備援
+- AI 白話摘要需設定 `GEMINI_API_KEY` 環境變數，未設定時自動跳過
+- AI 摘要使用 Gemini 2.0 Flash 為主，Gemini 2.5 Flash 為備援
 - 價格走勢圖 PNG 存於 `data/reports/charts/`，嵌入 T1 報告
 - 使用 `--no-ai-summary` 停用 AI 白話摘要，`--no-chart` 停用走勢圖
 
@@ -124,8 +124,9 @@ uv run python mcp_servers/financial_tools.py
 ```
 Financial_Assistant/
 ├── .claude/skills/
-│   ├── scan-market/SKILL.md    # /scan-market Skill（市場篩選 SOP）
-│   └── deep-analysis/SKILL.md  # /deep-analysis Skill（深度分析 SOP）
+│   ├── scan-market/SKILL.md     # /scan-market Skill（市場篩選 SOP）
+│   ├── deep-analysis/SKILL.md  # /deep-analysis Skill（深度分析 SOP）
+│   └── analyze-mag7/SKILL.md   # /analyze-mag7 Skill（MAG7 科技巨頭分析）
 ├── mcp_servers/             # MCP 伺服器（Python）
 │   └── financial_tools.py   # 六個金融工具（篩選 + 深度分析）
 ├── scripts/
@@ -139,7 +140,7 @@ Financial_Assistant/
 │   │   ├── results_store.py # JSON 持久化（Layer 1 + Layer 3）
 │   │   └── run_layer1.py    # Layer 1 CLI 進入點
 │   └── analyzer/            # Layer 3 深度分析模組
-│       ├── ai_summarizer.py      # AI 白話摘要生成器（Claude API, Haiku/Sonnet）
+│       ├── ai_summarizer.py      # AI 白話摘要生成器（Gemini API, Flash）
 │       ├── deep_data_fetcher.py  # 深度數據抓取（6 dataclass + yfinance 12 API + 快取）
 │       ├── peer_finder.py        # 同業比較器（找同業 + 批量抓取 + 排名）
 │       ├── price_chart.py        # 價格走勢圖生成器（matplotlib PNG）
@@ -163,7 +164,7 @@ Financial_Assistant/
 ## Layer 3 分析模板（7 組）
 | # | 模板 | 分析重點 |
 |---|------|---------|
-| T0 | AI 白話分析摘要 | Claude API 自動生成的白話文解讀（可停用） |
+| T0 | AI 白話分析摘要 | Gemini API 自動生成的白話文解讀（可停用） |
 | T1 | 價值估值報告 | 價格走勢圖 + DCF 參數 + 同業倍數 + 分析師目標價 |
 | T2 | 財務體質檢查 | 三表摘要 + 資產負債 + 現金流趨勢 |
 | T3 | 成長動能分析 | 營收/盈餘成長 + EPS 預估 + 盈餘驚喜 |
@@ -171,11 +172,12 @@ Financial_Assistant/
 | T5 | 同業競爭力排名 | 5+ 同業全面對比 + 各指標排名 |
 | T6 | 投資決策摘要 | 四維評估（估值/體質/成長/風險）|
 
-## Claude Code Skills（2 個）
+## Claude Code Skills（3 個）
 | Skill | 功能 |
 |-------|------|
 | `/scan-market` | Layer 1 市場篩選 SOP（預設 S&P 1500，雙軌制） |
-| `/deep-analysis` | Layer 3 深度分析 SOP（6 組報告 + 同業比較） |
+| `/deep-analysis` | Layer 3 深度分析 SOP（7 組報告 + 同業比較） |
+| `/analyze-mag7` | MAG7 科技巨頭分析（AAPL/MSFT/GOOGL/AMZN/NVDA/META/TSLA） |
 
 ## MCP 工具清單（6 個）
 | 工具 | 功能 |

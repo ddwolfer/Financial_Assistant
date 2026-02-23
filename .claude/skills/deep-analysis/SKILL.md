@@ -58,7 +58,7 @@ uv run python -m scripts.analyzer.run_layer3 --tickers AAPL --force-refresh
 呼叫 `generate_analysis_report` 工具：
 - `ticker`: 股票代碼
 - `force_refresh`: false
-- `ai_summary`: true（預設生成 AI 白話摘要，需 ANTHROPIC_API_KEY）
+- `ai_summary`: true（預設生成 AI 白話摘要，需 GEMINI_API_KEY）
 - `include_chart`: true（預設生成 6 個月價格走勢圖）
 
 **方式 B — CLI 備援：**
@@ -122,7 +122,7 @@ AI 自動生成的白話文解讀，讓非財金背景的用戶也能快速理�
 
 - 深度數據抓取：`scripts/analyzer/deep_data_fetcher.py`
 - 同業比較器：`scripts/analyzer/peer_finder.py`
-- AI 白話摘要：`scripts/analyzer/ai_summarizer.py`（Claude API, Haiku/Sonnet）
+- AI 白話摘要：`scripts/analyzer/ai_summarizer.py`（Gemini API, Flash）
 - 價格走勢圖：`scripts/analyzer/price_chart.py`（matplotlib PNG）
 - 報告生成器：`scripts/analyzer/report_generator.py`（7 組模板 T0-T6）
 - CLI 進入點：`scripts/analyzer/run_layer3.py`（`--no-ai-summary`、`--no-chart` 可停用）
