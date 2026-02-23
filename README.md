@@ -50,6 +50,12 @@ uv sync
 # 執行 Layer 1 篩選（S&P 500，雙軌制）
 uv run python -m scripts.scanner.run_layer1 --universe sp500
 
+# 執行 Layer 1 篩選（S&P 1500，全市場掃描）
+uv run python -m scripts.scanner.run_layer1 --universe sp1500
+
+# 強制重新抓取，忽略快取
+uv run python -m scripts.scanner.run_layer1 --universe sp500 --force-refresh
+
 # 執行 Layer 3 深度分析（指定股票）
 uv run python -m scripts.analyzer.run_layer3 --tickers AAPL MSFT
 
@@ -76,6 +82,15 @@ uv run python mcp_servers/financial_tools.py
 | `run_sector_screening` | 雙軌制產業篩選 |
 | `fetch_deep_analysis` | Layer 3 深度數據抓取 |
 | `generate_analysis_report` | 生成完整分析報告 |
+
+### Claude Code Skills
+
+在 Claude Code CLI 中可使用以下 Skill：
+
+| Skill | 說明 | 觸發方式 |
+|-------|------|---------|
+| `/scan-market` | Layer 1 市場篩選（預設 S&P 1500） | 「掃描市場」「篩選低估股」 |
+| `/deep-analysis` | Layer 3 深度分析（6 組報告） | 「分析 AAPL」「深度報告」 |
 
 ## 技術棧
 
@@ -115,6 +130,6 @@ Financial_Assistant/
 - [x] Layer 1: 量化篩選（雙軌制 + 快取）
 - [x] Layer 3: 深度分析（6 模板 + 同業比較）
 - [x] MCP 工具整合（6 個工具）
-- [ ] Claude Skill SOP
+- [x] Claude Skill SOP（`/scan-market` + `/deep-analysis`）
 - [ ] Telegram Bot 通知
 - [ ] Svelte 5 Dashboard
